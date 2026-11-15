@@ -24,7 +24,7 @@ async def aircraft():
         "lomax": 20.20
     }
 
-    async with httpx.AsyncClient(timeout=25) as client:
+    async with httpx.AsyncClient(timeout=30) as client:
         response = await client.get(
             "https://opensky-network.org/api/states/all",
             params=params
@@ -32,12 +32,11 @@ async def aircraft():
         response.raise_for_status()
         data = response.json()
 
-    aircraft_list = []
+    planes = []
     for s in data.get("states") or []:
         if s[5] is None or s[6] is None:
             continue
-
-        aircraft_list.append({
+        planes.append({
             "icao24": s[0],
             "callsign": (s[1] or "").strip(),
             "originCountry": s[2],
@@ -52,7 +51,7 @@ async def aircraft():
 
     return {
         "time": data.get("time"),
-        "count": len(aircraft_list),
-        "aircraft": aircraft_list,
+        "count": len(planes),
+        "aircraft": planes,
         "source": "OpenSky Network"
     }
