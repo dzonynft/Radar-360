@@ -16,24 +16,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java 17
+      - name: Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle
+      - name: Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Accept Android licenses
+      - name: Find Android SDK Manager
         run: |
-          yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses || true
+          echo "Android SDK: $ANDROID_HOME"
+          find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n 1)
+          if [ -z "$SDKMANAGER" ]; then
+            echo "ERROR: sdkmanager not found"
+            exit 1
+          fi
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          chmod +x "$SDKMANAGER"
+
+      - name: Accept licenses
+        run: |
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses || true
 
       - name: Install Android SDK
         run: |
-          sdkmanager --sdk_root="$ANDROID_HOME" \
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
             "platforms;android-35" \
             "build-tools;35.0.0"
 
