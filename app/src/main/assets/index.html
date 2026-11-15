@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Radar 360</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--bg:#0b1220;--panel:#121d2d;--panel2:#19283b;--line:#26384d;--txt:#edf4fb;--muted:#91a4b8;--green:#37d39a;--blue:#62b5ff;--red:#ff6878;--amber:#ffc45c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:14px system-ui,Arial}
+header{height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 15px;background:#101a29;border-bottom:1px solid var(--line)}
+.brand{font-weight:800;font-size:18px;letter-spacing:.5px}.brand span{color:var(--green)}.status{font-size:11px;color:var(--green)}
+#map{height:53vh;min-height:320px;width:100%;background:#172536}
+.toolbar{display:flex;gap:7px;overflow:auto;padding:10px;background:#101a29}
+button,.chip{border:1px solid var(--line);background:var(--panel2);color:var(--txt);padding:9px 11px;border-radius:10px;white-space:nowrap;font-size:12px}
+button.active{border-color:var(--green);color:var(--green);background:#123329}
+main{padding:12px}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:12px;min-height:75px}
+.card b{display:block;font-size:13px;margin-bottom:5px}.value{font-size:19px;font-weight:750}.small{font-size:11px;color:var(--muted);line-height:1.4}
+.section{font-size:14px;font-weight:750;margin:14px 0 9px}
+#feed{display:flex;flex-direction:column;gap:8px}.event{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--blue);border-radius:10px;padding:10px}
+.event.warn{border-left-color:var(--amber)}.event.danger{border-left-color:var(--red)}
+.tabs{display:flex;gap:7px;overflow:auto;padding:10px 12px;background:#101a29}
+.tab{font-size:12px;padding:8px 10px;border-radius:9px;background:transparent;border:1px solid transparent;color:var(--muted)}
+.tab.active{background:var(--panel2);border-color:var(--line);color:var(--txt)}
+#weather{font-size:13px;line-height:1.6}.foot{color:var(--muted);font-size:10px;padding:12px;line-height:1.5}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#142235;color:#edf4fb}
+.leaflet-control-attribution{font-size:9px}
+@media(min-width:700px){#map{height:65vh}.grid{grid-template-columns:repeat(4,1fr)}}
+</style>
+</head>
+<body>
+<header><div class="brand">RADAR <span>360</span></div><div class="status" id="status">● URUCHAMIANIE</div></header>
+<div class="toolbar" id="layers">
+<button class="active" data-layer="aircraft">Samoloty</button>
+<button class="active" data-layer="earthquakes">Trzęsienia ziemi</button>
+<button class="active" data-layer="weather">Pogoda</button>
+<button data-layer="ships">Statki AIS</button>
+<button data-layer="traffic">Ruch drogowy</button>
+<button data-layer="drones">Drony / strefy</button>
+<button data-layer="fires">Pożary</button>
+<button data-layer="trains">Kolej</button>
+</div>
+<div id="map"></div>
+<div class="tabs">
+<button class="tab active" data-tab="overview">Przegląd</button>
+<button class="tab" data-tab="events">Zdarzenia</button>
+<button class="tab" data-tab="weather">Pogoda</button>
+<button class="tab" data-tab="sources">Źródła i status</button>
+</div>
+<main>
+<div id="overview">
+<div class="grid">
+<div class="card"><b>Samoloty w pobliżu</b><div class="value" id="airCount">—</div><div class="small">OpenSky · odświeżanie ręczne/okresowe</div></div>
+<div class="card"><b>Trzęsienia ziemi</b><div class="value" id="quakeCount">—</div><div class="small">USGS · ostatnie 24 godziny</div></div>
+<div class="card"><b>Temperatura</b><div class="value" id="temp">—</div><div class="small" id="wind">Pobieranie pogody…</div></div>
+<div class="card"><b>Ostatnia aktualizacja</b><div class="value" id="updated" style="font-size:14px">—</div><div class="small">Czas lokalny urządzenia</div></div>
+</div>
+<div class="section">Ostatnie informacje</div><div id="feed"><div class="event">Pobieranie danych z publicznych źródeł…</div></div>
+</div>
+<div id="events" hidden><div class="section">Zdarzenia i komunikaty</div><div class="small">Ta wersja pokazuje zdarzenia z dostępnych publicznych kanałów danych. Nie jest systemem zgłoszeń alarmowych i nie zastępuje numeru 112.</div><div id="eventList"></div></div>
+<div id="weather" hidden><div class="section">Warunki pogodowe</div><div id="weatherDetails">Pobieranie danych…</div></div>
+<div id="sources" hidden><div class="section">Źródła danych i ograniczenia</div><div id="sourceList"></div></div>
+</main>
+<div class="foot">Radar 360 · Wersja prototypowa 0.1. Dane mogą być opóźnione, niepełne lub niedostępne. Mapa: © OpenStreetMap contributors. Nie używaj aplikacji jako narzędzia ratunkowego ani do śledzenia osób lub pojazdów służb.</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const CENTER=[54.1561,19.4045], RADIUS=1.0;
+const map=L.map('map',{zoomControl:true}).setView(CENTER,8);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap contributors'}).addTo(map);
+const groups={aircraft:L.layerGroup().addTo(map),earthquakes:L.layerGroup().addTo(map),weather:L.layerGroup().addTo(map)};
+const enabled={aircraft:true,earthquakes:true,weather:true,ships:false,traffic:false,drones:false,fires:false,trains:false};
+const feeds=[];
+function addFeed(title,desc,kind=''){feeds.unshift({title,desc,kind});feeds.splice(12);renderFeed()}
+function renderFeed(){const html=feeds.map(x=>`<div class="event ${x.kind}"><b>${esc(x.title)}</b><div class="small">${esc(x.desc)}</div></div>`).join('')||'<div class="small">Brak nowych informacji.</div>';document.getElementById('feed').innerHTML=html;document.getElementById('eventList').innerHTML=html}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function toggleLayer(k,on){enabled[k]=on;if(groups[k]){if(on)groups[k].addTo(map);else map.removeLayer(groups[k])}}
+document.querySelectorAll('[data-layer]').forEach(b=>b.onclick=()=>{let k=b.dataset.layer;let on=!enabled[k];b.classList.toggle('active',on);toggleLayer(k,on);if(!['aircraft','earthquakes','weather'].includes(k))addFeed('Moduł: '+b.textContent,on?'Włączony. Wymaga skonfigurowanego źródła danych.':'Wyłączony.')});
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));['overview','events','weather','sources'].forEach(k=>document.getElementById(k).hidden=k!==b.dataset.tab)});
+function marker(lat,lon,label,color,group){L.circleMarker([lat,lon],{radius:6,color,fillColor:color,fillOpacity:.85,weight:1}).bindPopup(label).addTo(group)}
+async function loadAircraft(){
+ try{
+  const [lat,lon]=CENTER, d=0.8;
+  const url=`https://opensky-network.org/api/states/all?lamin=${lat-d}&lamax=${lat+d}&lomin=${lon-d}&lomax=${lon+d}`;
+  const r=await fetch(url);if(!r.ok)throw Error('HTTP '+r.status);const j=await r.json();
+  groups.aircraft.clearLayers();let n=0;
+  (j.states||[]).forEach(s=>{if(s[5]==null||s[6]==null)return;n++;const callsign=(s[1]||'Brak callsign').trim(),alt=s[7]==null?'brak danych':Math.round(s[7])+' m',speed=s[9]==null?'brak danych':Math.round(s[9]*3.6)+' km/h';marker(s[6],s[5],`<b>${esc(callsign)}</b><br>ICAO: ${esc(s[0])}<br>Wysokość: ${alt}<br>Prędkość: ${speed}<br>Kurs: ${s[10]==null?'—':Math.round(s[10])+'°'}`, '#62b5ff',groups.aircraft)});
+  document.getElementById('airCount').textContent=n;addFeed('Dane lotnicze odświeżone',`OpenSky zwrócił ${n} obiektów w obszarze radaru.`);
+ }catch(e){document.getElementById('airCount').textContent='Brak';addFeed('Lotnictwo: brak danych',String(e.message),'warn')}
+}
+async function loadQuakes(){
+ try{
+  const r=await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson');if(!r.ok)throw Error('HTTP '+r.status);const j=await r.json();groups.earthquakes.clearLayers();let n=0;
+  j.features.forEach(f=>{const [lon,lat,depth]=f.geometry.coordinates;const p=f.properties;if(Math.abs(lat-CENTER[0])<12&&Math.abs(lon-CENTER[1])<18){n++;marker(lat,lon,`<b>${esc(p.place)}</b><br>Magnituda: ${p.mag}<br>Głębokość: ${depth} km<br><a href="${esc(p.url)}" target="_blank">Szczegóły USGS</a>`,'#ff6878',groups.earthquakes)}});
+  document.getElementById('quakeCount').textContent=n;addFeed('Aktywność sejsmiczna',`USGS: ${n} zdarzeń w szerokim obszarze mapy.`);
+ }catch(e){document.getElementById('quakeCount').textContent='Brak';addFeed('USGS: brak danych',e.message,'warn')}
+}
+async function loadWeather(){
+ try{
+  const u=`https://api.open-meteo.com/v1/forecast?latitude=${CENTER[0]}&longitude=${CENTER[1]}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,wind_speed_10m,wind_direction_10m,weather_code&hourly=precipitation_probability,wind_gusts_10m&forecast_days=1&timezone=auto`;
+  const r=await fetch(u);if(!r.ok)throw Error('HTTP '+r.status);const j=await r.json(),c=j.current;
+  document.getElementById('temp').textContent=Math.round(c.temperature_2m)+'°C';
+  document.getElementById('wind').textContent=`Wiatr ${c.wind_speed_10m} km/h · porywy i opady w prognozie`;
+  document.getElementById('weatherDetails').innerHTML=`Temperatura: <b>${c.temperature_2m}°C</b><br>Odczuwalna: ${c.apparent_temperature}°C<br>Wilgotność: ${c.relative_humidity_2m}%<br>Opad: ${c.precipitation} mm<br>Wiatr: ${c.wind_speed_10m} km/h, kierunek ${c.wind_direction_10m}°<br><br><span class="small">Prognoza Open-Meteo. To nie jest radar opadów ani oficjalne ostrzeżenie IMGW.</span>`;
+  addFeed('Pogoda odświeżona',`Temperatura ${c.temperature_2m}°C, wiatr ${c.wind_speed_10m} km/h.`);
+ }catch(e){document.getElementById('weatherDetails').textContent='Brak danych pogodowych: '+e.message}
+}
+function renderSources(){
+ const rows=[
+ ['OpenSky Network','Samoloty i parametry lotu','Dostęp API z limitami; czasem wymaga konta.'],
+ ['Open-Meteo','Bieżąca pogoda i prognoza','Działa bez klucza w typowym użyciu; warunki licencji i limity zależą od zastosowania.'],
+ ['USGS','Trzęsienia ziemi','Publiczny GeoJSON.'],
+ ['OpenStreetMap','Mapa bazowa','Kafelki publiczne z polityką użycia; przy większej skali należy użyć własnego dostawcy.'],
+ ['AISStream','Statki AIS','Wymaga klucza API i połączenia WebSocket; nie jest jeszcze podłączony.'],
+ ['GDDKiA / KPD','Utrudnienia drogowe','Wymaga integracji z aktualnym feedem lub usługą; brak uniwersalnego darmowego API do wszystkich zdarzeń.'],
+ ['IMGW / RSO','Ostrzeżenia i hydrologia','Do dodania po dopasowaniu oficjalnych kanałów i formatów.'],
+ ['PAŻP / DroneTower','Strefy i informacje lotnicze','Dane o strefach są czym innym niż lokalizacja wszystkich dronów.'],
+ ['NASA FIRMS','Detekcje termiczne pożarów','Wymaga klucza i uwzględnienia opóźnień danych.'],
+ ['Kolej / transport','Pociągi i opóźnienia','Dostępność publicznych danych zależy od operatora i regionu.'],
+ ['Policja / PSP / ZRM','Komunikaty o zdarzeniach','Tylko publiczne komunikaty; aplikacja nie śledzi prywatnych ani operacyjnych lokalizacji służb.']
+ ];
+ document.getElementById('sourceList').innerHTML=rows.map(x=>`<div class="event"><b>${esc(x[0])}</b><div>${esc(x[1])}</div><div class="small">${esc(x[2])}</div></div>`).join('');
+}
+function updateTime(){document.getElementById('updated').textContent=new Date().toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});document.getElementById('status').textContent='● SYSTEM AKTYWNY'}
+renderSources();loadAircraft();loadQuakes();loadWeather();updateTime();
+setInterval(()=>{loadAircraft();loadQuakes();loadWeather();updateTime()},5*60*1000);
+</script>
+</body></html>
