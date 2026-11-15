@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Radar 360</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.3.0/dist/maplibre-gl.css">
 <style>
 :root{--bg:#0b1220;--panel:#121d2d;--panel2:#19283b;--line:#26384d;--txt:#edf4fb;--muted:#91a4b8;--green:#37d39a;--blue:#62b5ff;--red:#ff6878;--amber:#ffc45c}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:14px system-ui,Arial}
@@ -63,15 +64,20 @@ main{padding:12px}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px
 <div id="sources" hidden><div class="section">Źródła danych i ograniczenia</div><div id="sourceList"></div></div>
 </main>
 <div class="foot">Radar 360 · Wersja prototypowa 0.1. Dane mogą być opóźnione, niepełne lub niedostępne. Mapa: © OpenStreetMap contributors. Nie używaj aplikacji jako narzędzia ratunkowego ani do śledzenia osób lub pojazdów służb.</div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
+<script type="importmap">
+{
+  "imports": {
+    "leaflet": "https://unpkg.com/leaflet@1.9.4/dist/leaflet-src.esm.js",
+    "maplibre-gl": "https://unpkg.com/maplibre-gl@6.3.0/dist/maplibre-gl.mjs"
+  }
+}
+</script>
+<script type="module">
+import * as L from 'leaflet';
+import { maplibreGL } from 'https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/dist/leaflet-maplibre-gl.mjs';
 const CENTER=[54.1561,19.4045], RADIUS=1.0;
-const map=L.map('map',{zoomControl:true}).setView(CENTER,8);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-    subdomains: 'abcd',
-    maxZoom: 20
-}).addTo(map);
+const map=L.map('map',{zoomControl:true,minZoom:1,maxBounds:[[-85,-180],[85,180]],maxBoundsViscosity:1}).setView(CENTER,8);
+maplibreGL({style:'https://tiles.openfreemap.org/styles/dark'}).addTo(map);
 const groups={aircraft:L.layerGroup().addTo(map),earthquakes:L.layerGroup().addTo(map),weather:L.layerGroup().addTo(map)};
 const enabled={aircraft:true,earthquakes:true,weather:true,ships:false,traffic:false,drones:false,fires:false,trains:false};
 const feeds=[];
