@@ -27,17 +27,11 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Find Android SDK Manager
+      - name: Find SDK Manager
         run: |
-          echo "Android SDK: $ANDROID_HOME"
-          find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f
           SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n 1)
-          if [ -z "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager not found"
-            exit 1
-          fi
           echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
-          chmod +x "$SDKMANAGER"
+          echo "Found: $SDKMANAGER"
 
       - name: Accept licenses
         run: |
